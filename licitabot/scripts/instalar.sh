@@ -140,7 +140,7 @@ if [ "${LICITABOT_WEB:-1}" = "1" ] && [ -d /etc/systemd/system ]; then
     systemctl daemon-reload
     systemctl enable --now licitabot-web >/dev/null 2>&1 || true
     systemctl is-active --quiet licitabot-web \
-      && ok "interface web ativa em http://127.0.0.1:8080" \
+      && ok "interface web ativa em http://127.0.0.1:8081" \
       || aviso "interface não subiu — veja: journalctl -u licitabot-web -n 30"
 fi
 

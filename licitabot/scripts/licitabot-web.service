@@ -20,7 +20,7 @@ Type=simple
 User=root
 WorkingDirectory=/root/licitacoes
 Environment=HOME=/root
-ExecStart=/usr/bin/python3 -m licitabot.cli web --host 127.0.0.1 --porta 8080
+ExecStart=/usr/bin/python3 -m licitabot.cli web --host 127.0.0.1 --porta 8081
 Restart=always
 RestartSec=5
 # endurecimento: a interface só lê o banco
