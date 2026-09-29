@@ -108,6 +108,8 @@ class Client:
         return CACHE_DIR / f"{h}.json"
 
     def _read_cache(self, url: str):
+        """Lê do cache. Aceita o formato novo `{url, dados}` e o antigo (payload
+        puro), para não invalidar cache já existente."""
         if not self.use_cache:
             return None
         p = self._cache_path(url)
@@ -116,20 +118,49 @@ class Client:
         if time.time() - p.stat().st_mtime > self.cache_ttl:
             return None
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            conteudo = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+        if isinstance(conteudo, dict) and "_url" in conteudo and "dados" in conteudo:
+            return conteudo["dados"]
+        return conteudo
 
     def _write_cache(self, url: str, payload) -> None:
+        """Grava no cache JUNTO com a URL que originou a resposta.
+
+        Por que guardar a URL: o nome do arquivo é um hash, então sem a URL o
+        conteúdo fica órfão — não dá para saber a que licitação pertence. Isso
+        custou caro: ao perder o banco, 361 páginas de itens em cache não
+        puderam ser religadas, porque os itens do PNCP não trazem o ID da
+        contratação no corpo. Com a URL gravada, o cache passa a ser
+        reconstruível e auditável.
+        """
         if not self.use_cache:
             return
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
             self._cache_path(url).write_text(
-                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                json.dumps({"_url": url, "dados": payload}, ensure_ascii=False),
+                encoding="utf-8",
             )
         except OSError:
             pass
+
+    @staticmethod
+    def ler_cache_com_url() -> list[tuple[str, object]]:
+        """Lê todo o cache devolvendo (url, dados). Útil para auditar e para
+        reconstruir estado a partir de respostas antigas."""
+        saida = []
+        for f in CACHE_DIR.glob("*.json"):
+            try:
+                c = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(c, dict) and "_url" in c and "dados" in c:
+                saida.append((c["_url"], c["dados"]))
+            else:
+                saida.append((None, c))     # cache antigo, sem URL
+        return saida
 
     # ------------------------------------------------------------------- core
     def _throttle(self) -> None:

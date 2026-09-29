@@ -171,6 +171,10 @@ class Handler(BaseHTTPRequestHandler):
             if rota == "/api/estatisticas":
                 return self._json(estatisticas_gerais(conn))
 
+            if rota == "/api/cobertura":
+                from .web_queries import cobertura_campos
+                return self._json(cobertura_campos(conn))
+
             if rota == "/api/exportar.csv":
                 return self._exportar_csv(conn, q)
 

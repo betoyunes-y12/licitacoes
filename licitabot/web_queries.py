@@ -115,21 +115,49 @@ def _coerce(valor, tipo):
     return str(valor)
 
 
+def normalizar_filtros(filtros: dict) -> dict:
+    """Une `uf` e `uf[]` numa chave só, sempre como lista.
+
+    O frontend envia checkboxes como `uf[]=SP` (sintaxe de array). O backend
+    esperava `uf`. A chave `uf[]` não casava com a whitelist e era ignorada em
+    silêncio — o filtro de UF simplesmente não funcionava, e a resposta vinha
+    com a base inteira. Aceitar as duas formas elimina a classe de erro.
+    """
+    saida: dict = {}
+    for chave, valor in (filtros or {}).items():
+        base = chave[:-2] if chave.endswith("[]") else chave
+        vals = valor if isinstance(valor, (list, tuple)) else [valor]
+        vals = [v for v in vals if v not in (None, "")]
+        if not vals:
+            continue
+        if base in saida:
+            atual = saida[base] if isinstance(saida[base], list) else [saida[base]]
+            saida[base] = atual + vals
+        else:
+            saida[base] = vals
+    return saida
+
+
 def _montar_where(filtros: dict, mapa: dict) -> tuple[list[str], list]:
-    """Traduz filtros em cláusulas WHERE parametrizadas."""
+    """Traduz filtros em cláusulas WHERE parametrizadas.
+
+    Múltiplos valores na MESMA faceta viram OR — escolher "SP" e "MG" significa
+    "SP ou MG". Entre facetas diferentes é AND, que é o comportamento esperado
+    de um painel de filtros.
+    """
     where: list[str] = []
     args: list = []
 
-    for chave, bruto in (filtros or {}).items():
+    for chave, bruto in normalizar_filtros(filtros).items():
         regra = mapa.get(chave)
         if not regra:
             continue                      # chave desconhecida: ignora com segurança
-        if isinstance(bruto, (list, tuple)):
-            bruto = bruto[0] if bruto else None
         coluna, op, tipo = regra
-        valor = _coerce(bruto, tipo)
-        if valor is None:
+        valores = [_coerce(v, tipo) for v in bruto]
+        valores = [v for v in valores if v is not None]
+        if not valores:
             continue
+        valor = valores[0]
 
         if op == "texto":
             # procura no objeto, itens, processo e informação complementar.
@@ -140,9 +168,16 @@ def _montar_where(filtros: dict, mapa: dict) -> tuple[list[str], list]:
                          "orgao LIKE ?)")
             args += [f"%{valor}%"] * 5
         elif op == "eq":
-            where.append(f"{coluna} = ?"); args.append(valor)
+            # OR entre valores da mesma faceta (SP ou MG), AND entre facetas
+            marcadores = ", ".join("?" for _ in valores)
+            where.append(f"{coluna} IN ({marcadores})"); args += valores
         elif op == "like":
-            where.append(f"{coluna} LIKE ?"); args.append(f"%{valor}%")
+            if len(valores) == 1:
+                where.append(f"{coluna} LIKE ?"); args.append(f"%{valor}%")
+            else:
+                cond = " OR ".join(f"{coluna} LIKE ?" for _ in valores)
+                where.append(f"({cond})")
+                args += [f"%{v}%" for v in valores]
         elif op == "min":
             where.append(f"{coluna} >= ?"); args.append(valor)
         elif op == "max":
@@ -156,8 +191,8 @@ def _montar_where(filtros: dict, mapa: dict) -> tuple[list[str], list]:
 
 
 def _somente_abertos(filtros: dict) -> bool:
-    v = (filtros or {}).get("abertos")
-    if isinstance(v, (list, tuple)):
+    v = normalizar_filtros(filtros).get("abertos")
+    if isinstance(v, list):
         v = v[0] if v else None
     return str(v).lower() in ("1", "true", "sim", "yes")
 
@@ -289,6 +324,40 @@ def facetas(conn, tabela: str = "oportunidades", filtros: dict | None = None) ->
     return saida
 
 
+# Campos que a interface consulta mas que podem estar sem dado na base.
+# A UI usa isto para DESABILITAR o filtro e explicar o motivo, em vez de deixar
+# o usuário clicar e receber zero resultados sem entender por quê.
+CAMPOS_OPCIONAIS = [
+    ("tipo_beneficio", "Benefício (ME/EPP)", "enriquecer"),
+    ("material_ou_servico", "Tipo (serviço/material)", "enriquecer"),
+    ("categoria_item", "Categoria do item", "enriquecer"),
+]
+
+
+def cobertura_campos(conn) -> dict:
+    """Diz quais campos opcionais têm dado, e quanto.
+
+    Serve para a interface avisar em vez de enganar. Um filtro que sempre
+    devolve zero é pior que um filtro ausente: o usuário conclui que a
+    ferramenta está vazia.
+    """
+    total = conn.execute("SELECT COUNT(*) FROM oportunidades").fetchone()[0] or 1
+    saida = {}
+    for campo, rotulo, como_preencher in CAMPOS_OPCIONAIS:
+        n = conn.execute(
+            f"SELECT COUNT(*) FROM oportunidades WHERE {campo} IS NOT NULL"
+        ).fetchone()[0]
+        saida[campo] = {
+            "rotulo": rotulo,
+            "preenchidos": n,
+            "total": total,
+            "percentual": round(n * 100 / total),
+            "disponivel": n > 0,
+            "como_preencher": como_preencher,
+        }
+    return saida
+
+
 def estatisticas_gerais(conn) -> dict:
     """Números do topo da interface."""
     q = lambda s, *a: conn.execute(s, a).fetchone()[0]
@@ -311,4 +380,5 @@ def estatisticas_gerais(conn) -> dict:
         "tecnologia_abertas": q(
             """SELECT COUNT(*) FROM oportunidades
                WHERE setor = 'tecnologia' AND data_encerramento >= ?""", agora),
+        "cobertura": cobertura_campos(conn),
     }

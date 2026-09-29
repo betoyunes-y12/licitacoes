@@ -96,6 +96,7 @@
 
   <main>
     <div class="cartoes" id="cartoes"></div>
+    <div id="aviso-cobertura"></div>
 
     <div class="barra">
       <span><span class="total" id="n-total">—</span> licitações</span>
@@ -185,10 +186,20 @@ async function carregar() {
     ]);
 
     pintarCartoes(est);
+    pintarAvisoCobertura(est);
     $('n-total').textContent = fmtNum(res.total);
 
     FACETAS.forEach((f) => {
       const el = $('facet-' + f);
+      // faceta sem nenhum valor = campo sem dado. Mostrar 0 opções faria o
+      // usuário achar que a ferramenta está quebrada.
+      const dados = fac[f];
+      if (!dados || !dados.valores.length) {
+        const rot = (est.cobertura && est.cobertura[f]) ? 'campo sem dado na base'
+                                                        : 'sem valores';
+        el.innerHTML = `<div class="vazio">${rot}</div>`;
+        return;
+      }
       el.innerHTML = facetasHTML(f, fac, estado[f] || []);
       el.querySelectorAll('input').forEach((inp) => {
         inp.addEventListener('change', () => {
