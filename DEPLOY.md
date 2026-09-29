@@ -46,15 +46,34 @@ camada web vira erro de consulta, não corrupção de dado.
 Para expor na internet, use `--permitir-todas` **atrás de autenticação**
 (nginx/caddy). A base tem dado comercial.
 
-## Pendência 1 — push para o GitHub
+## Git — RESOLVIDO
 
-    ERROR: The key you are authenticating with has been marked as read only.
+O push funcionou. A causa do bloqueio era sutil e vale registrar:
 
-O repositório tem deploy key somente leitura. Ajuste em
-https://github.com/betoyunes-y12/licitacoes/settings/keys
-(marcar "Allow write access" ou remover a deploy key).
+A mesma chave autenticava num repositório e falhava em outro, porque o
+`licitacoes` tinha uma **deploy key read-only com precedência** sobre o acesso
+de conta. A solução foi uma chave dedicada, cadastrada como chave de CONTA:
 
-Depois: `cd /root/licitacoes && git push -u origin main`
+    chave   : id_ed25519_licitacoes
+    config  : Host github-licitacoes (IdentitiesOnly yes)
+    ja subiu: commit 2a5153c (34 arquivos, 9 commits)
+
+Conferir o diagnóstico pelo cumprimento do SSH:
+
+    ssh -T github-licitacoes
+    # "Hi <usuario>/<repo>!"  -> autenticou por DEPLOY KEY do repo
+    # "Hi <usuario>!"         -> autenticou por chave de CONTA
+
+### web-host
+
+O servidor tem chave propria (`licitabot@web-host`), ainda **nao cadastrada**.
+Para que ele possa puxar direto do GitHub em vez de usar bundle, cadastre a
+publica em https://github.com/settings/keys:
+
+    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP2hx9RYBqJwLvQ8e/4EqfBXNLOas/v0MSC3wXbH2cmP licitabot@web-host
+    fingerprint SHA256:7+bPBhK3y4zJBeHVq9ogSnoU+1uYfe4gV/+5ETGvmbs
+
+Enquanto isso, o deploy por bundle continua funcionando.
 
 ## Pendência 2 — PNCP bloqueou o IP público (177.221.121.85)
 
