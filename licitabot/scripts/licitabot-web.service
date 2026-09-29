@@ -4,15 +4,14 @@
 #   sudo cp licitabot/scripts/licitabot-web.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now licitabot-web
-#   systemctl status licitabot-web
 #
-# Acesso local: http://127.0.0.1:8080
+# Acesso: http://127.0.0.1:8081
 # Para expor na rede, troque --host para 0.0.0.0 E COLOQUE AUTENTICAÇÃO na
 # frente (nginx/caddy). A base tem dado comercial; não exponha aberto.
 
 [Unit]
 Description=LicitaBot — interface web
-After=network-online.target licitabot-sync.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -20,15 +19,24 @@ Type=simple
 User=root
 WorkingDirectory=/root/licitacoes
 Environment=HOME=/root
+# PYTHONUNBUFFERED importa: sem ele o log só aparece quando o buffer enche,
+# e um serviço que "não loga nada" é impossível de depurar.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 -m licitabot.cli web --host 127.0.0.1 --porta 8081
 Restart=always
 RestartSec=5
-# endurecimento: a interface só lê o banco
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
 StandardOutput=journal
 StandardError=journal
+
+# ENDURECIMENTO — com uma ressalva importante.
+# `ProtectSystem=full` e `ProtectHome` deixam /root inacessível. Como o
+# repositório costuma ficar em /root/licitacoes, o serviço morre sem log
+# nenhum (foi exatamente o que aconteceu no primeiro deploy). Por isso
+# ProtectHome=false aqui. Se você mover o projeto para /opt, pode remover
+# esta linha e ganhar o endurecimento completo.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=false
 
 [Install]
 WantedBy=multi-user.target
