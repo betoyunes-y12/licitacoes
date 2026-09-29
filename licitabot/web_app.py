@@ -71,11 +71,24 @@ def abrir_ro(db_path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+# Faixas autorizadas por padrão: localhost e a rede privada do Tailscale
+# (100.64.0.0/10, CGNAT). Isso permite usar a interface pelo tailnet — que é
+# privado — sem abrir para a internet. Qualquer outra origem é recusada.
+FAIXAS_PERMITIDAS = ("127.", "::1", "100.", "fd7a:115c:a1e0:")
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "LicitaBot/0.1"
     db_path: Path | None = None
+    permitir_todas = False
 
     # ------------------------------------------------------------- utilidades
+    def _autorizado(self) -> bool:
+        if self.permitir_todas:
+            return True
+        ip = self.client_address[0] if self.client_address else ""
+        return any(ip.startswith(p) for p in FAIXAS_PERMITIDAS)
+
     def _json(self, dados, status: int = 200) -> None:
         corpo = json.dumps(dados, ensure_ascii=False, default=str).encode("utf-8")
         self.send_response(status)
@@ -110,6 +123,13 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------ rotas
     def do_GET(self) -> None:  # noqa: N802 (API do http.server)
+        if not self._autorizado():
+            self._erro(
+                "acesso restrito. A interface libera apenas localhost e o "
+                "tailnet. Use --host 0.0.0.0 --permitir-todas para expor, "
+                "de preferência atrás de autenticação.", 403)
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         rota = parsed.path.rstrip("/") or "/"
         q = urllib.parse.parse_qs(parsed.query)
@@ -197,8 +217,10 @@ def _int(v, default):
 
 
 def rodar(host: str = "127.0.0.1", porta: int = 8080,
-          db_path: Path | str | None = None) -> None:
+          db_path: Path | str | None = None,
+          permitir_todas: bool = False) -> None:
     Handler.db_path = Path(db_path) if db_path else DB_PATH
+    Handler.permitir_todas = permitir_todas
     # confere a base antes de subir, para falhar com mensagem clara
     abrir_ro(Handler.db_path).close()
 
@@ -209,6 +231,11 @@ def rodar(host: str = "127.0.0.1", porta: int = 8080,
     print(f"  resultados : {url}/resultados")
     print(f"  API        : {url}/api/licitacoes?uf=SP&abertos=1")
     print(f"  base       : {Handler.db_path}")
+    if host == "0.0.0.0":
+        if permitir_todas:
+            print("  ATENÇÃO: aberto para qualquer origem (--permitir-todas).")
+        else:
+            print("  acesso liberado apenas para localhost e o tailnet (100.x).")
     print("  (Ctrl+C para parar)")
     try:
         srv.serve_forever()

@@ -5,7 +5,8 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now licitabot-web
 #
-# Acesso: http://127.0.0.1:8081
+# Acesso local  : http://127.0.0.1:8081
+# Acesso tailnet: http://<ip-tailscale>:8081
 # Para expor na rede, troque --host para 0.0.0.0 E COLOQUE AUTENTICAÇÃO na
 # frente (nginx/caddy). A base tem dado comercial; não exponha aberto.
 
@@ -22,7 +23,10 @@ Environment=HOME=/root
 # PYTHONUNBUFFERED importa: sem ele o log só aparece quando o buffer enche,
 # e um serviço que "não loga nada" é impossível de depurar.
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 -m licitabot.cli web --host 127.0.0.1 --porta 8081
+# Escuta em 0.0.0.0 mas a ACL interna do app só libera localhost e o
+# tailnet (100.x). Isso permite abrir a interface pela rede privada
+# sem expor para a internet.
+ExecStart=/usr/bin/python3 -m licitabot.cli web --host 0.0.0.0 --porta 8081
 Restart=always
 RestartSec=5
 StandardOutput=journal

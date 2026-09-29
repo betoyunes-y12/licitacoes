@@ -421,7 +421,8 @@ def cmd_web(args) -> int:
     """Sobe a interface web (licitações + resultados)."""
     from .web_app import rodar
     try:
-        rodar(host=args.host, porta=args.porta, db_path=args.db)
+        rodar(host=args.host, porta=args.porta, db_path=args.db,
+              permitir_todas=args.permitir_todas)
     except FileNotFoundError as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
@@ -793,6 +794,8 @@ def main(argv=None) -> int:
     p.add_argument("--host", default="127.0.0.1",
                    help="127.0.0.1 (padrão, local) ou 0.0.0.0 para expor na rede")
     p.add_argument("--porta", type=int, default=8080)
+    p.add_argument("--permitir-todas", action="store_true",
+                   help="libera qualquer origem (padrão: só localhost e tailnet)")
     p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("links", help="lista licitações com links e documentos")
