@@ -1,63 +1,81 @@
 # Deploy do LicitaBot — estado atual
 
-## Concluído
+## No ar agora
 
-| Item | Estado |
+| O que | Onde |
 |---|---|
-| Código commitado (dsh) | `043b5ab` — 26 arquivos, 6.412 linhas |
-| Transferido ao web-host | `/root/licitacoes` em `043b5ab` |
-| CLI funcionando no web-host | sim |
-| Timer systemd | ativo (`licitabot-sync.timer`, de hora em hora) |
-| Bundle de backup | `/root/licitabot.bundle` (99 KB, histórico completo) |
+| **Interface de licitações** | http://100.72.121.78:8081/ |
+| **Interface de resultados** | http://100.72.121.78:8081/resultados |
+| Acesso local no web-host | http://127.0.0.1:8081 |
+| Código | `/root/licitacoes` (web-host) e `/root/Licitações` (dsh) |
+| Commit | `a9c42fd` |
 
-## PENDÊNCIA 1 — push para o GitHub (só você resolve)
+Dados servidos: **1.510 licitações** (1.059 abertas, R$ 9,38 bi) e
+**2.717 contratos** (1.658 fornecedores, R$ 7,51 bi).
 
-Erro nas duas máquinas:
+## Comandos
+
+    cd /root/licitacoes
+
+    python3 -m licitabot.cli web --porta 8081     # sobe a interface
+    python3 -m licitabot.cli resumo               # panorama no terminal
+    python3 -m licitabot.cli listar --abertos     # lista no terminal
+    ./licitabot/scripts/atualizar.sh              # forçar coleta + classificação
+
+    systemctl status licitabot-web                # interface
+    systemctl status licitabot-sync.timer         # coleta horária
+    journalctl -u licitabot-web -f                # log da interface
+
+## API
+
+    /api/licitacoes?setor=tecnologia&abertos=1&por_pagina=25
+    /api/contratos?fornecedor=iacit&ordem=valor
+    /api/facetas?setor=tecnologia     # contagens respeitam os filtros ativos
+    /api/estatisticas
+    /api/exportar.csv?uf=SP&abertos=1
+
+## Segurança
+
+A interface escuta em `0.0.0.0` mas o próprio app **barra origem não
+autorizada**: libera apenas localhost e a faixa do Tailscale (100.64.0.0/10).
+Verificado: 127.0.0.1 → 200, IP da rede local → 403.
+
+A base é aberta em **modo somente leitura** (`sqlite mode=ro`): um bug na
+camada web vira erro de consulta, não corrupção de dado.
+
+Para expor na internet, use `--permitir-todas` **atrás de autenticação**
+(nginx/caddy). A base tem dado comercial.
+
+## Pendência 1 — push para o GitHub
 
     ERROR: The key you are authenticating with has been marked as read only.
 
-A chave autentica como `betoyunes-y12`, mas o repositório tem deploy key
-somente leitura. Ajuste em:
+O repositório tem deploy key somente leitura. Ajuste em
+https://github.com/betoyunes-y12/licitacoes/settings/keys
+(marcar "Allow write access" ou remover a deploy key).
 
-    https://github.com/betoyunes-y12/licitacoes/settings/keys
+Depois: `cd /root/licitacoes && git push -u origin main`
 
-Opção A — na deploy key existente, marcar "Allow write access"
-Opção B — remover a deploy key (a chave do web-host já autentica como usuário)
+## Pendência 2 — PNCP bloqueou o IP público (177.221.121.85)
 
-Depois, o push funciona:
+    Recv failure: Connection reset by peer   (após TLS estabelecer)
 
-    cd /root/licitacoes && git push -u origin main     # no web-host
-    cd /root/Licitações && git push -u origin main     # no dsh
+Afeta dsh e web-host (mesmo IP). O Compras.gov.br continua acessível.
+Aguardar algumas horas. O cliente agora desiste após 3 cortes em vez de
+insistir, então o timer não piora o bloqueio.
 
-## PENDÊNCIA 2 — PNCP bloqueou o IP público (177.221.121.85)
-
-    Connected to pncp.gov.br port 443
-    SSL connection using TLSv1.3 ... verify ok
-    Recv failure: Connection reset by peer
-
-TCP e TLS estabelecem; o servidor corta depois. É bloqueio por origem, causado
-pela coleta intensiva. Afeta dsh E web-host, porque compartilham o IP público.
-
-O Compras.gov.br continua acessível — o bloqueio é só do PNCP.
-
-**Aguarde algumas horas.** O código agora desiste após 3 cortes (em vez de
-insistir), e o timer vai falhar silenciosamente sem piorar o bloqueio.
-
-## Verificação quando liberar
+**Quando liberar:**
 
     cd /root/licitacoes
-    python3 -m licitabot.cli --delay 0.5 sync --janela 15
-    python3 -m licitabot.cli classificar
-    python3 -m licitabot.cli resumo
+    python3 -m licitabot.cli --delay 0.5 sync --janela 15   # não use delay < 0.5
+    python3 -m licitabot.cli classificar                     # offline, 2s
 
-## Funciona sem o PNCP
+## Lições do deploy (para não repetir)
 
-    python3 -m licitabot.cli fontes       # 25 fontes catalogadas
-    python3 -m licitabot.cli setores      # setores disponíveis
-    python3 -m licitabot.cli classificar  # offline, 2s
-
-## Prevenção para não bloquear de novo
-
-- `--delay 0.5` no mínimo (0,12 causou bloqueio imediato)
-- não rode backfill de meses e sync simultâneos
-- o circuit breaker agora protege: 3 cortes e desiste
+- **`ProtectSystem=full` / `ProtectHome` quebram o serviço** quando o
+  repositório está em `/root`: o processo não lê o próprio código e sai limpo,
+  sem log. O unit usa `ProtectHome=false`.
+- **`PYTHONUNBUFFERED=1` é obrigatório** no service: sem ele o log só aparece
+  quando o buffer enche, e um serviço que "não loga nada" é impossível de
+  depurar.
+- A porta **8080 já estava ocupada** pelo docker-proxy no web-host. Usamos 8081.
