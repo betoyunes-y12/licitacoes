@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import http.client
 import json
 import random
 import time
@@ -22,6 +23,11 @@ UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+# Identificacao propria: portais publicos gostam de saber quem os consome, e
+# um contato no UA ajuda a nao sermos tratados como scraper abusivo.
+# Usado via `-ua` na CLI quando o portal exigir identificacao.
+UA_PROPRIO = "LicitaBot/0.1 (monitoramento de licitacoes; contato: betoyunes@gmail.com)"
 
 CACHE_DIR = Path(__file__).resolve().parent / "data" / ".cache"
 
@@ -59,6 +65,13 @@ class Client:
     COOLDOWN_429 = 60.0
     COOLDOWN_429_MAX = 900.0
 
+    # Cortes de conexão sem resposta ("Connection reset by peer") indicam
+    # bloqueio por origem, não erro de rede. Insistir renova o bloqueio, então
+    # tratamos como o 429: espera longa e progressiva.
+    COOLDOWN_CORTE = 120.0
+    COOLDOWN_CORTE_MAX = 1800.0
+    MAX_CORTES = 3          # após isso, desiste: o IP está bloqueado
+
     def __init__(
         self,
         *,
@@ -77,6 +90,7 @@ class Client:
         self.cache_ttl = cache_ttl
         self._last_call = 0.0
         self._n_429 = 0
+        self._n_cortes = 0
         self.on_rate_limit = on_rate_limit
         self.headers = {
             "User-Agent": UA,
@@ -160,7 +174,8 @@ class Client:
                         # PNCP devolve 200 com corpo vazio quando faltam headers
                         raise HttpError(0, url, "corpo vazio")
                     data = json.loads(text)
-                    self._n_429 = 0  # sucesso: zera o backoff de 429
+                    self._n_429 = 0     # sucesso: zera os backoffs
+                    self._n_cortes = 0
                     if cache_on:
                         self._write_cache(url, data)
                     return data
@@ -199,7 +214,26 @@ class Client:
                     last_exc = RateLimited(url, espera)
                     continue  # não consome o contador de retry normal
                 last_exc = HttpError(e.code, url, body)
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, HttpError) as e:
+            except (urllib.error.URLError, http.client.HTTPException,
+                    TimeoutError, json.JSONDecodeError, HttpError) as e:
+                msg = str(e).lower()
+                if any(k in msg for k in ("reset by peer", "connection reset",
+                                          "remote end closed", "broken pipe")):
+                    self._n_cortes += 1
+                    espera = min(self.COOLDOWN_CORTE * (2 ** (self._n_cortes - 1)),
+                                 self.COOLDOWN_CORTE_MAX)
+                    if self.on_rate_limit:
+                        self.on_rate_limit(espera)
+                    if self._n_cortes >= self.MAX_CORTES:
+                        # Desistir é o certo: continuar só prolonga o bloqueio.
+                        raise RuntimeError(
+                            f"conexão cortada {self._n_cortes}x por {url}. "
+                            "Isso indica bloqueio do IP de origem — espere e "
+                            "tente depois, com --delay maior."
+                        ) from e
+                    time.sleep(espera)
+                    last_exc = e
+                    continue
                 last_exc = e
 
             self.stats["retries"] += 1
