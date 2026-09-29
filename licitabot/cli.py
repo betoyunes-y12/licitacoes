@@ -417,6 +417,21 @@ def cmd_contratos(args) -> int:
     return 0
 
 
+def cmd_web(args) -> int:
+    """Sobe a interface web (licitações + resultados)."""
+    from .web_app import rodar
+    try:
+        rodar(host=args.host, porta=args.porta, db_path=args.db)
+    except FileNotFoundError as e:
+        print(f"\n{e}\n", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"\nNão consegui abrir {args.host}:{args.porta} — {e}", file=sys.stderr)
+        print("Tente outra porta: --porta 8081\n", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_links(args) -> int:
     """Lista licitações com todos os links: PNCP, portal de origem e documentos."""
     from .documentos import listar_documentos_oportunidade
@@ -773,6 +788,12 @@ def main(argv=None) -> int:
     p.add_argument("--edital", help="ver vencedores de um edital específico")
     p.add_argument("--fornecedor", help="histórico de um fornecedor (CNPJ)")
     p.set_defaults(func=cmd_contratos)
+
+    p = sub.add_parser("web", help="sobe a interface web (licitações + resultados)")
+    p.add_argument("--host", default="127.0.0.1",
+                   help="127.0.0.1 (padrão, local) ou 0.0.0.0 para expor na rede")
+    p.add_argument("--porta", type=int, default=8080)
+    p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("links", help="lista licitações com links e documentos")
     p.add_argument("--uf")

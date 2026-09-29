@@ -130,6 +130,20 @@ else
     aviso "coleta inicial falhou — verifique rede e o log acima"
 fi
 
+if [ "${LICITABOT_WEB:-1}" = "1" ] && [ -d /etc/systemd/system ]; then
+    info "instalando serviço da interface web"
+    sed -e "s|/root/licitacoes|$DESTINO|g" \
+        -e "s|^User=.*|User=$USUARIO|" \
+        -e "s|^Environment=HOME=.*|Environment=HOME=$(eval echo ~$USUARIO)|" \
+        "$DESTINO/licitabot/scripts/licitabot-web.service" \
+        > /etc/systemd/system/licitabot-web.service
+    systemctl daemon-reload
+    systemctl enable --now licitabot-web >/dev/null 2>&1 || true
+    systemctl is-active --quiet licitabot-web \
+      && ok "interface web ativa em http://127.0.0.1:8080" \
+      || aviso "interface não subiu — veja: journalctl -u licitabot-web -n 30"
+fi
+
 info "classificando a base"
 "$PY" -m licitabot.cli classificar 2>&1 | tail -6 || aviso "classificação falhou"
 

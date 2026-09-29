@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LicitaBot — Licitações</title>
+<link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+
+<header class="topo">
+  <h1>LicitaBot <span>· licitações públicas</span></h1>
+  <nav class="abas">
+    <a href="/" class="ativo">Licitações</a>
+    <a href="/resultados">Resultados</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <aside class="filtros">
+    <div class="grupo">
+      <label class="titulo">Busca livre</label>
+      <input type="text" id="f-texto" placeholder="software, merenda, obra…">
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Situação</label>
+      <label style="display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="f-abertos"> Somente com prazo aberto
+      </label>
+      <label style="display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer;margin-top:5px">
+        <input type="checkbox" id="f-sem_resultado"> Ainda sem resultado publicado
+      </label>
+      <label style="display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer;margin-top:5px">
+        <input type="checkbox" id="f-srp"> Registro de preços
+      </label>
+      <label style="display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer;margin-top:5px">
+        <input type="checkbox" id="f-nacional"> Exige conteúdo nacional
+      </label>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Setor</label>
+      <div class="opcoes" id="facet-setor"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">UF</label>
+      <div class="opcoes" id="facet-uf"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Benefício (ME/EPP)</label>
+      <input type="text" id="f-beneficio" placeholder="ex.: ME/EPP">
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Modalidade</label>
+      <div class="opcoes" id="facet-modalidade"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Tipo</label>
+      <div class="opcoes" id="facet-material_ou_servico"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Faixa de valor (R$)</label>
+      <div class="linha2">
+        <input type="number" id="f-valor_min" placeholder="mín">
+        <input type="number" id="f-valor_max" placeholder="máx">
+      </div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Prazo de encerramento</label>
+      <div class="linha2">
+        <input type="date" id="f-prazo_de">
+        <input type="date" id="f-prazo_ate">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button data-atalho="3" style="flex:1;font-size:12px">3 dias</button>
+        <button data-atalho="7" style="flex:1;font-size:12px">7 dias</button>
+        <button data-atalho="30" style="flex:1;font-size:12px">30 dias</button>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Órgão</label>
+      <input type="text" id="f-orgao" placeholder="prefeitura, universidade…">
+    </div>
+
+    <button class="limpar" id="btn-limpar">Limpar filtros</button>
+  </aside>
+
+  <main>
+    <div class="cartoes" id="cartoes"></div>
+
+    <div class="barra">
+      <span><span class="total" id="n-total">—</span> licitações</span>
+      <span class="dir">
+        <label style="font-size:12px;color:var(--texto3)">ordenar por</label>
+        <select id="f-ordem" style="width:auto">
+          <option value="prazo">prazo (mais próximo)</option>
+          <option value="publicacao">publicação (mais recente)</option>
+          <option value="valor">maior valor</option>
+          <option value="valor_asc">menor valor</option>
+          <option value="orgao">órgão</option>
+        </select>
+        <a id="btn-csv" href="#" style="font-size:13px">exportar CSV</a>
+      </span>
+    </div>
+
+    <div id="resultado"><div class="carregando">carregando…</div></div>
+    <div id="paginacao"></div>
+  </main>
+
+</div>
+
+<script src="/static/comum.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// Filtros que são lista (checkbox) vs. campo simples
+const FACETAS = ['setor', 'uf', 'modalidade', 'material_ou_servico'];
+const CAMPOS = ['texto', 'beneficio', 'orgao', 'valor_min', 'valor_max',
+                'prazo_de', 'prazo_ate'];
+const FLAGS  = ['abertos', 'sem_resultado', 'srp', 'nacional'];
+
+let estado = Object.assign({ ordem: 'prazo' }, Parametros.ler());
+FACETAS.forEach((f) => { if (estado[f] && !Array.isArray(estado[f])) estado[f] = [estado[f]]; });
+
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- renderizar
+function pintarCartoes(est) {
+  const c = [
+    ['Abertas agora', fmtNum(est.abertas)],
+    ['Vencendo em 7 dias', fmtNum(est.vencendo_7d)],
+    ['Tecnologia abertas', fmtNum(est.tecnologia_abertas)],
+    ['Valor total aberto', fmtMoeda(est.valor_total_aberto)],
+    ['Órgãos cadastrados', fmtNum(est.oportunidades)],
+  ];
+  $('cartoes').innerHTML = c.map(([r, n]) =>
+    `<div class="cartao"><div class="rot">${r}</div><div class="num">${n}</div></div>`).join('');
+}
+
+function linhaHTML(r) {
+  const [cl, txt] = classePrazo(r.data_encerramento);
+  const tags = [];
+  if (r.setor) tags.push(`<span class="tag info">${esc(r.setor)}</span>`);
+  if (r.setor_confianca === 'baixa') tags.push('<span class="tag nao">confiança baixa</span>');
+  if (r.tipo_beneficio && /ME\/EPP/i.test(r.tipo_beneficio)) tags.push('<span class="tag roxo">ME/EPP</span>');
+  if (r.srp) tags.push('<span class="tag nao">SRP</span>');
+  if (r.material_ou_servico === 'S') tags.push('<span class="tag sim">serviço</span>');
+  if (r.material_ou_servico === 'M') tags.push('<span class="tag nao">material</span>');
+
+  return `<tr>
+    <td class="${cl}" style="white-space:nowrap">${txt}<div style="font-size:11px;color:var(--texto3)">${fmtData(r.data_encerramento)}</div></td>
+    <td class="obj">
+      <div class="t">${esc((r.objeto || '').slice(0, 300))}</div>
+      <div class="o">${esc(r.orgao || '')}${r.unidade_nome ? ' · ' + esc(r.unidade_nome) : ''}</div>
+      <div style="margin-top:4px">${tags.join(' ')}</div>
+    </td>
+    <td style="white-space:nowrap">${esc(r.municipio || '—')}<div style="font-size:11px;color:var(--texto3)">${esc(r.uf || '')}</div></td>
+    <td class="num">${fmtMoeda(r.valor_estimado)}</td>
+    <td style="white-space:nowrap;font-size:12px">${esc(r.modalidade || '—')}<div style="font-size:11px;color:var(--texto3)">${esc(r.modo_disputa || '')}</div></td>
+    <td class="centro">${r.link ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">PNCP</a>` : '—'}
+      ${r.link_sistema_origem ? `<div style="font-size:11px"><a href="${esc(r.link_sistema_origem)}" target="_blank" rel="noopener">portal</a></div>` : ''}
+    </td>
+  </tr>`;
+}
+
+// -------------------------------------------------------------------- carregar
+async function carregar() {
+  Parametros.escrever(estado);
+  $('btn-csv').href = '/api/exportar.csv?' + new URLSearchParams(
+    Object.fromEntries(Object.entries(estado).filter(([k]) => k !== 'pagina'))).toString();
+
+  try {
+    const [res, fac, est] = await Promise.all([
+      api('/api/licitacoes', estado),
+      api('/api/facetas', Object.assign({ tabela: 'oportunidades' }, estado, { pagina: null })),
+      api('/api/estatisticas', {}),
+    ]);
+
+    pintarCartoes(est);
+    $('n-total').textContent = fmtNum(res.total);
+
+    FACETAS.forEach((f) => {
+      const el = $('facet-' + f);
+      el.innerHTML = facetasHTML(f, fac, estado[f] || []);
+      el.querySelectorAll('input').forEach((inp) => {
+        inp.addEventListener('change', () => {
+          const marcados = [...el.querySelectorAll('input:checked')].map((i) => i.value);
+          if (marcados.length) estado[f] = marcados; else delete estado[f];
+          estado.pagina = 1;
+          carregar();
+        });
+      });
+    });
+
+    if (!res.itens.length) {
+      $('resultado').innerHTML = `<div class="estado">
+        <div class="grande">Nenhuma licitação com esses filtros</div>
+        <div>Tente remover um filtro ou ampliar a faixa de valor.</div></div>`;
+      $('paginacao').innerHTML = '';
+      return;
+    }
+
+    $('resultado').innerHTML = `<table>
+      <thead><tr>
+        <th>Prazo</th><th>Objeto</th><th>Local</th><th style="text-align:right">Valor</th>
+        <th>Modalidade</th><th style="text-align:center">Link</th>
+      </tr></thead>
+      <tbody>${res.itens.map(linhaHTML).join('')}</tbody></table>`;
+
+    $('paginacao').innerHTML = paginacaoHTML(res);
+    $('paginacao').querySelectorAll('button[data-pag]').forEach((b) =>
+      b.addEventListener('click', () => { estado.pagina = b.dataset.pag; carregar(); }));
+  } catch (e) {
+    $('resultado').innerHTML = `<div class="estado"><div class="grande">Erro ao consultar</div><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+// --------------------------------------------------------------- interação
+let t = null;
+CAMPOS.forEach((c) => {
+  const el = $('f-' + c);
+  if (!el) return;
+  if (estado[c]) el.value = estado[c];
+  el.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (el.value) estado[c] = el.value; else delete estado[c];
+      estado.pagina = 1;
+      carregar();
+    }, 350);
+  });
+});
+
+FLAGS.forEach((f) => {
+  const el = $('f-' + f);
+  el.checked = !!estado[f];
+  el.addEventListener('change', () => {
+    if (el.checked) estado[f] = '1'; else delete estado[f];
+    estado.pagina = 1;
+    carregar();
+  });
+});
+
+$('f-ordem').value = estado.ordem || 'prazo';
+$('f-ordem').addEventListener('change', (e) => {
+  estado.ordem = e.target.value; estado.pagina = 1; carregar();
+});
+
+document.querySelectorAll('button[data-atalho]').forEach((b) =>
+  b.addEventListener('click', () => {
+    const dias = Number(b.dataset.atalho);
+    const d = new Date(); d.setDate(d.getDate() + dias);
+    const iso = d.toISOString().slice(0, 10);
+    estado.prazo_de = new Date().toISOString().slice(0, 10);
+    estado.prazo_ate = iso;
+    estado.abertos = '1';
+    $('f-prazo_de').value = estado.prazo_de;
+    $('f-prazo_ate').value = iso;
+    $('f-abertos').checked = true;
+    estado.pagina = 1;
+    carregar();
+  }));
+
+$('btn-limpar').addEventListener('click', () => {
+  estado = { ordem: estado.ordem || 'prazo' };
+  location.search = '';
+});
+
+carregar();
+</script>
+</body>
+</html>

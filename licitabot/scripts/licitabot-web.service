@@ -1,0 +1,34 @@
+# Interface web do LicitaBot (licitações + resultados).
+#
+# Instalar:
+#   sudo cp licitabot/scripts/licitabot-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now licitabot-web
+#   systemctl status licitabot-web
+#
+# Acesso local: http://127.0.0.1:8080
+# Para expor na rede, troque --host para 0.0.0.0 E COLOQUE AUTENTICAÇÃO na
+# frente (nginx/caddy). A base tem dado comercial; não exponha aberto.
+
+[Unit]
+Description=LicitaBot — interface web
+After=network-online.target licitabot-sync.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/licitacoes
+Environment=HOME=/root
+ExecStart=/usr/bin/python3 -m licitabot.cli web --host 127.0.0.1 --porta 8080
+Restart=always
+RestartSec=5
+# endurecimento: a interface só lê o banco
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

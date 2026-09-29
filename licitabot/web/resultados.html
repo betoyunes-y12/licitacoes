@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LicitaBot — Resultados</title>
+<link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+
+<header class="topo">
+  <h1>LicitaBot <span>· resultados e concorrência</span></h1>
+  <nav class="abas">
+    <a href="/">Licitações</a>
+    <a href="/resultados" class="ativo">Resultados</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <aside class="filtros">
+    <div class="grupo">
+      <label class="titulo">Busca livre</label>
+      <input type="text" id="f-texto" placeholder="objeto, órgão, fornecedor…">
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Fornecedor</label>
+      <input type="text" id="f-fornecedor" placeholder="razão social">
+      <input type="text" id="f-ni" placeholder="CNPJ (só números)" style="margin-top:6px">
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Categoria oficial</label>
+      <div class="opcoes" id="facet-categoria"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">UF</label>
+      <div class="opcoes" id="facet-uf"></div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Faixa de valor contratado (R$)</label>
+      <div class="linha2">
+        <input type="number" id="f-valor_min" placeholder="mín">
+        <input type="number" id="f-valor_max" placeholder="máx">
+      </div>
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Órgão</label>
+      <input type="text" id="f-orgao" placeholder="comando, prefeitura…">
+    </div>
+
+    <div class="grupo">
+      <label class="titulo">Edital específico</label>
+      <input type="text" id="f-edital" placeholder="númeroControlePNCP">
+      <div style="font-size:11px;color:var(--texto3);margin-top:4px">
+        Liga o contrato de volta à licitação de origem.
+      </div>
+    </div>
+
+    <button class="limpar" id="btn-limpar">Limpar filtros</button>
+  </aside>
+
+  <main>
+    <div class="cartoes" id="cartoes"></div>
+
+    <div class="barra">
+      <span><span class="total" id="n-total">—</span> contratos</span>
+      <span class="dir">
+        <label style="font-size:12px;color:var(--texto3)">ordenar por</label>
+        <select id="f-ordem" style="width:auto">
+          <option value="valor">maior valor</option>
+          <option value="valor_asc">menor valor</option>
+          <option value="publicacao">publicação (mais recente)</option>
+          <option value="fornecedor">fornecedor</option>
+        </select>
+      </span>
+    </div>
+
+    <div id="resultado"><div class="carregando">carregando…</div></div>
+    <div id="paginacao"></div>
+  </main>
+
+</div>
+
+<script src="/static/comum.js"></script>
+<script>
+const FACETAS = ['categoria', 'uf'];
+const CAMPOS = ['texto', 'fornecedor', 'ni', 'orgao', 'edital',
+                'valor_min', 'valor_max'];
+
+let estado = Object.assign({ ordem: 'valor' }, Parametros.ler());
+FACETAS.forEach((f) => { if (estado[f] && !Array.isArray(estado[f])) estado[f] = [estado[f]]; });
+const $ = (id) => document.getElementById(id);
+
+function pintarCartoes(est) {
+  const c = [
+    ['Contratos', fmtNum(est.contratos)],
+    ['Fornecedores únicos', fmtNum(est.fornecedores)],
+    ['Valor contratado', fmtMoeda(est.valor_contratado)],
+    ['Licitações na base', fmtNum(est.oportunidades)],
+  ];
+  $('cartoes').innerHTML = c.map(([r, n]) =>
+    `<div class="cartao"><div class="rot">${r}</div><div class="num pequeno">${n}</div></div>`).join('');
+}
+
+function linhaHTML(r) {
+  const bens = [];
+  if (r.categoria) bens.push(`<span class="tag info">${esc(r.categoria)}</span>`);
+  if (r.tipo_pessoa === 'PF') bens.push('<span class="tag nao">pessoa física</span>');
+
+  return `<tr>
+    <td class="obj">
+      <div class="t" style="font-weight:600">${esc(r.fornecedor || '—')}</div>
+      <div class="o">CNPJ/CPF: ${esc(r.ni_fornecedor || '—')}</div>
+      <div style="margin-top:4px">${bens.join(' ')}</div>
+    </td>
+    <td class="obj">
+      <div class="t">${esc((r.objeto || '').slice(0, 220))}</div>
+      <div class="o">${esc(r.orgao || '')}</div>
+    </td>
+    <td style="white-space:nowrap">${esc(r.municipio || '—')}<div style="font-size:11px;color:var(--texto3)">${esc(r.uf || '')}</div></td>
+    <td class="num" style="font-weight:600">${fmtMoeda(r.valor_global)}
+      <div style="font-size:11px;color:var(--texto3);font-weight:400">${r.numero_parcelas ? r.numero_parcelas + ' parcela(s)' : ''}</div>
+    </td>
+    <td style="white-space:nowrap;font-size:12px;color:var(--texto2)">
+      ${fmtData(r.vigencia_inicio)}<div style="font-size:11px;color:var(--texto3)">a ${fmtData(r.vigencia_fim)}</div>
+    </td>
+    <td style="white-space:nowrap">
+      ${r.edital_id ? `<a href="/?texto=${encodeURIComponent(r.edital_id)}" title="ver a licitação de origem">edital</a>` : '—'}
+    </td>
+  </tr>`;
+}
+
+async function carregar() {
+  Parametros.escrever(estado);
+  try {
+    const [res, fac, est] = await Promise.all([
+      api('/api/contratos', estado),
+      api('/api/facetas', Object.assign({ tabela: 'contratos' }, estado, { pagina: null })),
+      api('/api/estatisticas', {}),
+    ]);
+
+    pintarCartoes(est);
+    $('n-total').textContent = fmtNum(res.total);
+
+    FACETAS.forEach((f) => {
+      const el = $('facet-' + f);
+      el.innerHTML = facetasHTML(f, fac, estado[f] || []);
+      el.querySelectorAll('input').forEach((inp) =>
+        inp.addEventListener('change', () => {
+          const marcados = [...el.querySelectorAll('input:checked')].map((i) => i.value);
+          if (marcados.length) estado[f] = marcados; else delete estado[f];
+          estado.pagina = 1; carregar();
+        }));
+    });
+
+    if (!res.itens.length) {
+      $('resultado').innerHTML = `<div class="estado">
+        <div class="grande">Nenhum contrato com esses filtros</div>
+        <div>A base cobre os órgãos já coletados. Rode a coleta de contratos
+        para ampliar: <code>python3 -m licitabot.cli contratos</code></div></div>`;
+      $('paginacao').innerHTML = '';
+      return;
+    }
+
+    $('resultado').innerHTML = `<table>
+      <thead><tr>
+        <th>Fornecedor</th><th>Objeto</th><th>Local</th>
+        <th style="text-align:right">Valor</th><th>Vigência</th><th>Origem</th>
+      </tr></thead>
+      <tbody>${res.itens.map(linhaHTML).join('')}</tbody></table>`;
+
+    $('paginacao').innerHTML = paginacaoHTML(res);
+    $('paginacao').querySelectorAll('button[data-pag]').forEach((b) =>
+      b.addEventListener('click', () => { estado.pagina = b.dataset.pag; carregar(); }));
+  } catch (e) {
+    $('resultado').innerHTML = `<div class="estado"><div class="grande">Erro ao consultar</div><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+let t = null;
+CAMPOS.forEach((c) => {
+  const el = $('f-' + c);
+  if (!el) return;
+  if (estado[c]) el.value = estado[c];
+  el.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (el.value) estado[c] = el.value; else delete estado[c];
+      estado.pagina = 1; carregar();
+    }, 350);
+  });
+});
+
+$('f-ordem').value = estado.ordem || 'valor';
+$('f-ordem').addEventListener('change', (e) => {
+  estado.ordem = e.target.value; estado.pagina = 1; carregar();
+});
+
+$('btn-limpar').addEventListener('click', () => { estado = { ordem: estado.ordem }; location.search = ''; });
+
+carregar();
+</script>
+</body>
+</html>
