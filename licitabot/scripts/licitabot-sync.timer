@@ -1,0 +1,12 @@
+[Unit]
+Description=LicitaBot — atualiza a base de licitações a cada hora
+Requires=licitabot-sync.service
+
+[Timer]
+# A cada hora, com 5 min de folga para não competir com o pico do portal
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

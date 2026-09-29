@@ -1,0 +1,107 @@
+{
+  "empresa": {
+    "razao_social": "Minha Empresa LTDA",
+    "cnpj": "00000000000000",
+    "porte": "ME",
+    "me_epp": true,
+    "consorcio_aceito": true
+  },
+  "atuacao": {
+    "ufs": ["SP", "MG", "PR"],
+    "municipios_raio_km": 300,
+    "esferas": ["F", "E", "M"],
+    "valor_min": 20000,
+    "valor_max": 5000000
+  },
+  "cnaes": ["6201500", "6202300", "6203100", "6204000", "6311900"],
+  "palavras_chave": {
+    "obrigatorias": [],
+    "fortes": [
+      "desenvolvimento de software",
+      "licenciamento de software",
+      "sistema web",
+      "aplicativo mobile",
+      "transformacao digital",
+      "computacao em nuvem",
+      "cloud computing",
+      "suporte tecnico de ti",
+      "infraestrutura de ti",
+      "seguranca da informacao",
+      "banco de dados",
+      "business intelligence",
+      "integracao de sistemas",
+      "api rest",
+      "devops",
+      "lgpd adequacao",
+      "ciencia de dados",
+      "inteligencia artificial"
+    ],
+    "medias": [
+      "software",
+      "sistema",
+      "aplicativo",
+      "servidor",
+      "hospedagem",
+      "datacenter",
+      "ti",
+      "tic",
+      "tecnologia da informacao",
+      "manutencao de computadores",
+      "suporte de informatica",
+      "digitalizacao",
+      "treinamento em ti"
+    ],
+    "negativas": [
+      "obra civil",
+      "construcao de edificacao",
+      "reforma predial",
+      "merenda escolar",
+      "medicamento",
+      "veiculo automotor",
+      "locacao de veiculos",
+      "material de limpeza",
+      "genero alimenticio",
+      "combustivel",
+      "servico de vigilancia armada",
+      "coleta de residuos",
+      "transporte escolar"
+    ]
+  },
+  "categorias_pncp": ["Informática (TIC)"],
+  "classes_servico": [7],
+  "tipo_oferta": {
+    "_nota": "Separa 'vendo servico' de 'vendo produto'. Editais de equipamento (notebook, impressora, switch) pontuam como TIC mas nao sao o alvo de uma software house.",
+    "aceita_servico": true,
+    "aceita_material": false,
+    "penalidade_material": -18,
+    "termos_produto": [
+      "aquisicao de equipamentos",
+      "fornecimento de equipamentos",
+      "estacoes de trabalho",
+      "computadores portateis",
+      "notebook",
+      "impressora",
+      "toner",
+      "cartucho",
+      "switch",
+      "roteador",
+      "cabo de rede",
+      "nobreak",
+      "projetor multimidia",
+      "tablet",
+      "monitor de video",
+      "gabinete movel"
+    ]
+  },
+  "pesos": {
+    "forte": 10,
+    "media": 4,
+    "categoria_match": 6,
+    "cnae_match": 8,
+    "negativa_penalidade": -50
+  },
+  "limiares": {
+    "score_minimo": 10,
+    "score_alerta": 25
+  }
+}

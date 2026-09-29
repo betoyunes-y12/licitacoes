@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------- dados gerados
+# Nada aqui deve ir para o git. São artefatos reproduzíveis: qualquer pessoa
+# recria rodando `ingerir` + `classificar`. Versionar 28 MB de banco e PDFs
+# deixaria o repositório pesado e desatualizado em relação ao código.
+data/
+dados/
+*.db
+*.db-wal
+*.db-shm
+*.csv
+*.jsonl
+
+# cache HTTP: 77 MB de respostas do PNCP, puro desperdício no repositório
+.cache/
+
+# -------------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+
+# --------------------------------------------------------------- ferramentas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ----------------------------------------------------------------- editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ------------------------------------------------------------------- sistema
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------- segredos e credenciais
+# Nunca versionar token de API, chave SSH ou perfil de empresa real.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+config/empresa.local.json

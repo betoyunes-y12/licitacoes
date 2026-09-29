@@ -1,0 +1,29 @@
+# Alternativa ao cron: systemd timer (mais robusto — tem log, retry e
+# sobrevive a reboot sem configuração extra).
+#
+# Instalar:
+#   sudo cp scripts/licitabot-sync.service /etc/systemd/system/
+#   sudo cp scripts/licitabot-sync.timer   /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now licitabot-sync.timer
+#   systemctl list-timers licitabot-sync.timer
+#   journalctl -u licitabot-sync.service -f
+
+[Unit]
+Description=LicitaBot — atualização da base de licitações
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# $HOME vazio quebra git e outras ferramentas; o cron/systemd nao define
+Environment=HOME=/root
+User=root
+WorkingDirectory=/root/Licitações
+ExecStart=/root/Licitações/licitabot/scripts/atualizar.sh
+# Se falhar, tenta de novo em 5 min (rede instável acontece)
+Restart=on-failure
+RestartSec=300
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal

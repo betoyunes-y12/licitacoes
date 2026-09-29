@@ -1,0 +1,34 @@
+{
+  "_fonte": "PNCP - Lei 14.133/2021. Códigos verificados contra a API de consulta do PNCP.",
+  "_verificado_em": "teste ao vivo: modalidades 5, 6 e 7 retornam dados em /v1/contratacoes/publicacao",
+  "modalidades": [
+    { "codigo": 1, "nome": "Leilão - Eletrônico", "nota": "bens móveis/imóveis, alienação" },
+    { "codigo": 2, "nome": "Diálogo Competitivo", "nota": "inovação/contratação integrada" },
+    { "codigo": 3, "nome": "Concurso", "nota": "trabalho técnico/artístico/científico" },
+    { "codigo": 4, "nome": "Concorrência - Eletrônica", "nota": "obras e serviços de engenharia de grande vulto" },
+    { "codigo": 5, "nome": "Concorrência - Presencial", "nota": "" },
+    { "codigo": 6, "nome": "Pregão - Eletrônico", "nota": "MAIS RELEVANTE para bens e serviços comuns (inclui software)" },
+    { "codigo": 7, "nome": "Pregão - Presencial", "nota": "" },
+    { "codigo": 8, "nome": "Dispensa", "nota": "contratação direta - alto valor estratégico (sem disputa)" },
+    { "codigo": 9, "nome": "Inexigibilidade", "nota": "fornecedor exclusivo" },
+    { "codigo": 10, "nome": "Manifestação de Interesse", "nota": "PMI - procedimento preliminar" },
+    { "codigo": 11, "nome": "Pré-qualificação", "nota": "" },
+    { "codigo": 12, "nome": "Credenciamento", "nota": "interessante para serviços recorrentes" },
+    { "codigo": 13, "nome": "Leilão - Presencial", "nota": "" }
+  ],
+  "criterios_julgamento": [
+    { "id": 1, "nome": "Menor preço" },
+    { "id": 2, "nome": "Maior desconto" },
+    { "id": 3, "nome": "Melhor técnica ou conteúdo artístico" },
+    { "id": 4, "nome": "Técnica e preço" },
+    { "id": 5, "nome": "Maior lance (leilão)" },
+    { "id": 6, "nome": "Maior retorno econômico" }
+  ],
+  "categorias_item_pncp": [
+    { "id": 1, "nome": "Uso Consumo" },
+    { "id": 2, "nome": "Uso e Consumo (categoria especial)" },
+    { "id": 3, "nome": "Informática (TIC) - VERIFICADO ao vivo" },
+    { "id": 4, "nome": "Serviços" },
+    { "id": 5, "nome": "Obras" }
+  ]
+}
