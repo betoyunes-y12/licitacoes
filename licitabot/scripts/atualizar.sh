@@ -25,6 +25,32 @@ fi
 
 cd "$RAIZ"
 
+# ---------------------------------------------------------------- bloqueio
+# O PNCP bloqueia o IP de origem quando a coleta é agressiva, e o sintoma é
+# corte de conexão (Recv failure: Connection reset by peer) — não é 429.
+# Se o portal estiver bloqueado, INSISTIR DE HORA EM HORA RENOVA O BLOQUEIO.
+# Aqui detectamos antes de tentar e paramos até o fim da janela de espera.
+MARCA="$RAIZ/data/.bloqueio-pncp"
+JANELA_HORAS="${LICITABOT_ESPERA_BLOQUEIO:-6}"
+
+if [ -f "$MARCA" ]; then
+    IDADE_H=$(( ( $(date +%s) - $(stat -c %Y "$MARCA") ) / 3600 ))
+    if [ "$IDADE_H" -lt "$JANELA_HORAS" ]; then
+        echo "$LOG_PREFIX PNCP bloqueado há ${IDADE_H}h — aguardando mais $((JANELA_HORAS - IDADE_H))h (sem tentar)"
+        exit 0
+    fi
+    echo "$LOG_PREFIX janela de espera vencida — tentando novamente"
+    rm -f "$MARCA"
+fi
+
+# pré-checagem barata: não gasta coleta inteira para descobrir o bloqueio
+if ! curl -s -o /dev/null --max-time 20 "https://pncp.gov.br/" 2>/dev/null; then
+    echo "$LOG_PREFIX PNCP sem resposta — marcando bloqueio por ${JANELA_HORAS}h"
+    date > "$MARCA"
+    exit 0
+fi
+rm -f "$MARCA"
+
 echo "$LOG_PREFIX iniciando atualização incremental"
 
 # 1) Snapshot da janela aberta: captura novos editais e atualiza prazos.
