@@ -13,6 +13,11 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# O pacote `licitabot` vive em $RAIZ; para `python3 -m licitabot.cli` achar o
+# modulo, o DIRETORIO PAI precisa estar no sys.path. Sem isto o systemd/cron
+# falha com "ModuleNotFoundError: No module named 'licitabot'" (visto em
+# 29/09/2026, jornal do licitabot-sync) e a base nunca atualiza.
+export PYTHONPATH="$RAIZ/..${PYTHONPATH:+:$PYTHONPATH}"
 export HOME="${HOME:-/root}"
 LOCK="/tmp/licitabot-sync.lock"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
