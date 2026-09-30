@@ -12,12 +12,16 @@
 
 set -euo pipefail
 
-RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# O pacote `licitabot` vive em $RAIZ; para `python3 -m licitabot.cli` achar o
-# modulo, o DIRETORIO PAI precisa estar no sys.path. Sem isto o systemd/cron
-# falha com "ModuleNotFoundError: No module named 'licitabot'" (visto em
-# 29/09/2026, jornal do licitabot-sync) e a base nunca atualiza.
-export PYTHONPATH="$RAIZ/..${PYTHONPATH:+:$PYTHONPATH}"
+# O script vive em licitabot/scripts/: a RAIZ do PROJETO (pasta que CONTEM o
+# pacote `licitabot`) fica DOIS niveis acima. Rodar de dentro do pacote quebra
+# duas vezes: `python3 -m licitabot.cli` nao acha o modulo (ModuleNotFoundError)
+# e `licitabot/http.py` sombreia o `http` da biblioteca padrao ("No module named
+# 'http.client'; 'http' is not a package"). Os dois foram vistos em 29/09/2026 no
+# jornal do licitabot-sync, com a base parada em 0 licitacoes.
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Caminhos de dados que ja existiam dentro do pacote (ex.: marcador de bloqueio).
+PACOTE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$RAIZ${PYTHONPATH:+:$PYTHONPATH}"
 export HOME="${HOME:-/root}"
 LOCK="/tmp/licitabot-sync.lock"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
@@ -35,7 +39,7 @@ cd "$RAIZ"
 # corte de conexão (Recv failure: Connection reset by peer) — não é 429.
 # Se o portal estiver bloqueado, INSISTIR DE HORA EM HORA RENOVA O BLOQUEIO.
 # Aqui detectamos antes de tentar e paramos até o fim da janela de espera.
-MARCA="$RAIZ/data/.bloqueio-pncp"
+MARCA="$PACOTE/data/.bloqueio-pncp"
 JANELA_HORAS="${LICITABOT_ESPERA_BLOQUEIO:-6}"
 
 if [ -f "$MARCA" ]; then
