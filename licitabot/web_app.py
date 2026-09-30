@@ -81,6 +81,10 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "LicitaBot/0.1"
     db_path: Path | None = None
     permitir_todas = False
+    # Prefixo externo quando servido atrás de proxy reverso. O `tailscale
+    # serve --set-path /licitabot` entrega o caminho COM o prefixo, então o
+    # roteamento precisa descartá-lo. Sem isso, /licitabot/ cai em 404.
+    prefixo = ""
 
     # ------------------------------------------------------------- utilidades
     def _autorizado(self) -> bool:
@@ -131,8 +135,20 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         parsed = urllib.parse.urlparse(self.path)
-        rota = parsed.path.rstrip("/") or "/"
+        caminho = parsed.path
+        if self.prefixo and caminho.startswith(self.prefixo):
+            caminho = caminho[len(self.prefixo):] or "/"
+        rota = caminho.rstrip("/") or "/"
         q = urllib.parse.parse_qs(parsed.query)
+
+        # /licitabot sem barra final precisa virar /licitabot/, senão os
+        # links relativos da página resolvem contra a raiz do domínio.
+        if (self.prefixo and parsed.path == self.prefixo
+                and not parsed.path.endswith("/")):
+            self.send_response(301)
+            self.send_header("Location", self.prefixo + "/")
+            self.end_headers()
+            return
 
         try:
             conn = abrir_ro(self.db_path)
@@ -222,14 +238,17 @@ def _int(v, default):
 
 def rodar(host: str = "127.0.0.1", porta: int = 8080,
           db_path: Path | str | None = None,
-          permitir_todas: bool = False) -> None:
+          permitir_todas: bool = False,
+          prefixo: str = "") -> None:
     Handler.db_path = Path(db_path) if db_path else DB_PATH
     Handler.permitir_todas = permitir_todas
+    Handler.prefixo = prefixo.rstrip("/")
     # confere a base antes de subir, para falhar com mensagem clara
     abrir_ro(Handler.db_path).close()
 
     srv = ThreadingHTTPServer((host, porta), Handler)
-    url = f"http://{host if host != '0.0.0.0' else 'localhost'}:{porta}"
+    base = f"http://{host if host != '0.0.0.0' else 'localhost'}:{porta}{prefixo}"
+    url = base
     print(f"LicitaBot — interface no ar")
     print(f"  licitações : {url}/")
     print(f"  resultados : {url}/resultados")
