@@ -162,3 +162,17 @@ td.centro { text-align: center; }
 /* ------------------------------------------------------------- barra valor */
 .barra-valor { height: 5px; border-radius: 3px; background: var(--bg3); overflow: hidden; margin-top: 4px; }
 .barra-valor > i { display: block; height: 100%; background: var(--azul); }
+
+/* Bloco de itens selecionados no topo da faceta.
+   Existe para o usuário não precisar caçar o que marcou numa lista longa
+   (UF tem 27 opções, cabem ~4 na tela). */
+.sel-topo { background: #12212e; border-bottom: 1px solid var(--borda); }
+.sel-cab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; font-size: 10.5px; color: var(--texto3);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.sel-cab .limpar-faceta {
+  margin-left: auto; padding: 1px 7px; font-size: 10.5px; line-height: 1.5;
+}
+.sel-sep { height: 6px; background: var(--bg); border-bottom: 1px solid var(--bg3); }

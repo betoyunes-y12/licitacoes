@@ -201,13 +201,10 @@ async function carregar() {
         return;
       }
       el.innerHTML = facetasHTML(f, fac, estado[f] || []);
-      el.querySelectorAll('input').forEach((inp) => {
-        inp.addEventListener('change', () => {
-          const marcados = [...el.querySelectorAll('input:checked')].map((i) => i.value);
-          if (marcados.length) estado[f] = marcados; else delete estado[f];
-          estado.pagina = 1;
-          carregar();
-        });
+      ligarFaceta(el, f, (marcados) => {
+        if (marcados.length) estado[f] = marcados; else delete estado[f];
+        estado.pagina = 1;
+        carregar();
       });
     });
 

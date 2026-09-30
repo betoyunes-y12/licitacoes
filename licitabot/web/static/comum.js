@@ -104,17 +104,58 @@ async function api(rota, params) {
   return r.json();
 }
 
-// Renderiza a lista de checkboxes de uma faceta
+// Renderiza a lista de checkboxes de uma faceta.
+//
+// Duas decisões de usabilidade, aprendidas testando a seleção múltipla de UF
+// (27 opções, 4 visíveis por vez na tela):
+//
+// 1. Os selecionados vão para o TOPO. Sem isso, marcar "RS" na posição 10 e
+//    depois rolar para marcar "AC" na posição 1 deixa o usuário sem saber o
+//    que está ativo.
+// 2. Os selecionados vêm em bloco próprio, com separador e "limpar". Assim dá
+//    para conferir e desfazer a seleção sem caçar item por item na lista.
 function facetasHTML(campo, facetas, selecionados, onChange) {
-  const dados = facetas[campo];
-  if (!dados || !dados.valores.length) return '<div class="vazio">sem valores</div>';
-  const sel = Array.isArray(selecionados) ? selecionados : (selecionados ? [selecionados] : []);
-  return dados.valores.map((v) => `
+  const dados0 = facetas[campo];
+  if (!dados0 || !dados0.valores.length) return '<div class="vazio">sem valores</div>';
+  return _facetasItens(campo, dados0.valores,
+    Array.isArray(selecionados) ? selecionados : (selecionados ? [selecionados] : []));
+}
+
+function _facetasItens(campo, valores, sel) {
+  const marcados = valores.filter((v) => sel.includes(String(v.valor)));
+  const resto = valores.filter((v) => !sel.includes(String(v.valor)));
+
+  const item = (v) => `
     <label>
-      <input type="checkbox" value="${esc(v.valor)}" ${sel.includes(String(v.valor)) ? 'checked' : ''}>
+      <input type="checkbox" value="${esc(v.valor)}" checked>
       <span>${esc(rotulo(campo, v.valor))}</span>
       <span class="n">${fmtNum(v.n)}</span>
-    </label>`).join('');
+    </label>`;
+
+  if (!marcados.length) {
+    return resto.map((v) => `
+      <label>
+        <input type="checkbox" value="${esc(v.valor)}">
+        <span>${esc(rotulo(campo, v.valor))}</span>
+        <span class="n">${fmtNum(v.n)}</span>
+      </label>`).join('');
+  }
+
+  return `
+    <div class="sel-topo">
+      <div class="sel-cab">
+        <span>${marcados.length} selecionada${marcados.length > 1 ? 's' : ''}</span>
+        <button type="button" class="limpar-faceta" data-campo="${esc(campo)}">limpar</button>
+      </div>
+      ${marcados.map(item).join('')}
+    </div>
+    ${resto.length ? '<div class="sel-sep"></div>' : ''}
+    ${resto.map((v) => `
+      <label>
+        <input type="checkbox" value="${esc(v.valor)}">
+        <span>${esc(rotulo(campo, v.valor))}</span>
+        <span class="n">${fmtNum(v.n)}</span>
+      </label>`).join('')}`;
 }
 
 function paginacaoHTML(pag) {
@@ -124,4 +165,20 @@ function paginacaoHTML(pag) {
     <span class="pag">página ${pag.pagina} de ${fmtNum(pag.paginas)}</span>
     <button ${pag.pagina >= pag.paginas ? 'disabled' : ''} data-pag="${pag.pagina + 1}">próxima →</button>
   </div>`;
+}
+
+
+// Liga o botão "limpar" de uma faceta e os checkboxes.
+// Centralizado aqui porque as duas telas (licitações e resultados) usam a
+// mesma lógica, e duplicar isso foi o que permitiu o bug de busca textual
+// passar despercebido: o mesmo comportamento implementado duas vezes.
+function ligarFaceta(el, campo, aoMudar) {
+  el.querySelectorAll('input[type=checkbox]').forEach((inp) => {
+    inp.addEventListener('change', () => {
+      const marcados = [...el.querySelectorAll('input:checked')].map((i) => i.value);
+      aoMudar(marcados);
+    });
+  });
+  const btn = el.querySelector('.limpar-faceta');
+  if (btn) btn.addEventListener('click', (ev) => { ev.preventDefault(); aoMudar([]); });
 }
