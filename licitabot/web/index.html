@@ -134,6 +134,41 @@ FACETAS.forEach((f) => { if (estado[f] && !Array.isArray(estado[f])) estado[f] =
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- renderizar
+// ------------------------------------------------------------------ cobertura
+// Um filtro que sempre devolve zero é pior que um filtro ausente: o usuário
+// conclui que a ferramenta está vazia. Os campos sem dado são desabilitados
+// com explicação e o comando para preencher.
+const CAMPOS_COM_FILTRO = { tipo_beneficio: 'f-beneficio' };
+
+function pintarAvisoCobertura(est) {
+  const cob = est.cobertura || {};
+
+  Object.entries(CAMPOS_COM_FILTRO).forEach(([campo, id]) => {
+    const el = $(id);
+    if (!el) return;
+    const c = cob[campo];
+    const semDado = c && !c.disponivel;
+    el.disabled = !!semDado;
+    el.style.opacity = semDado ? '.45' : '1';
+    el.placeholder = semDado ? 'sem dado na base' : 'ex.: ME/EPP';
+  });
+
+  const alvo = $('aviso-cobertura');
+  if (!alvo) return;
+  const faltando = Object.entries(cob).filter(([, v]) => !v.disponivel);
+  if (!faltando.length) { alvo.innerHTML = ''; return; }
+
+  const itens = faltando.map(([, v]) =>
+    `<b>${esc(v.rotulo)}</b> (${v.preenchidos}/${v.total})`).join(' · ');
+
+  alvo.innerHTML = `<div style="background:#2a2110;border:1px solid #7a5a12;
+    border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;
+    color:#d29922">
+    <b>Filtros indisponíveis</b> — sem dado na base: ${itens}.
+    Rode <code>python3 -m licitabot.cli enriquecer --limite 500</code> para preencher.
+    </div>`;
+}
+
 function pintarCartoes(est) {
   const c = [
     ['Abertas agora', fmtNum(est.abertas)],
