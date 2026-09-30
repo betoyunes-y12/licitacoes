@@ -505,3 +505,92 @@ Aeronáutica), Omnisys Engenharia (R$ 579 mi), IACIT Soluções Tecnológicas
 > **Este é o ativo que faltava.** Os editais dizem o que está sendo comprado.
 > Os contratos dizem **quem vence, a que preço e com que frequência** — que é a
 > informação que permite decidir se vale disputar.
+
+---
+
+## 2.6 Plataformas comerciais: dá para usá-las como fonte?
+
+Pergunta legítima: se já existem plataformas que agregam licitações, por que não
+consumir os dados delas? Testei as principais para responder com fato.
+
+### O que encontrei ao sondar (29/09/2026)
+
+| Plataforma | Situação | Tem API? |
+|---|---|---|
+| **LicitaJá** | Online, ativa | **SIM — API pública documentada** |
+| ConLicitação | Online | Não (`/api` → 404) |
+| BNC — Bolsa Nacional de Compras | Online | Não (só usa BrasilAPI para IBGE) |
+| Licitações Brasil | Online, instável | Não (404 e timeouts) |
+| LicitaMais | Online (site de notícias) | Não |
+| comlicitacao.com.br | **Não responde** (DNS resolve, conexão falha) | Inacessível |
+| LicitaBid · AcheiLicita | Não resolvem | Inacessíveis |
+
+### LicitaJá: a única com API — e por que NÃO serve
+
+É uma plataforma séria desde 2011, e tem API real, documentada em OpenAPI:
+
+```
+servidor : https://www.licitaja.com.br/api/v1
+auth     : header  X-API-KEY
+endpoints: /tender/search · /tender/{id} · /tender/newcomment · /tender/like
+limites  : 10 requisições/minuto; limite diário dinâmico
+```
+
+O buscador deles tem `keyword`, `state`, `city`, `type`, `date`, `order` e
+`expanded` (busca no texto dos editais). Tecnicamente, é bom.
+
+**Mas os Termos de Uso proíbem exatamente o nosso caso** (texto da própria
+página de integração):
+
+> "Não é permitido o uso para extração em massa ou rastreamento automatizado de
+> grandes volumes de dados."
+>
+> "O uso inadequado da API, incluindo o desrespeito aos limites, **divulgação em
+> serviços concorrentes** ou a realização de atividades proibidas […] pode
+> resultar na suspensão do acesso."
+
+Ou seja: 10 req/min inviabiliza coletar 30 mil licitações/mês, e usar os dados
+num produto próprio é violação expressa. **Consumir essa API para alimentar o
+LicitaBot colocaria o negócio em risco jurídico.**
+
+### A conclusão que importa
+
+**Não precisamos dessas plataformas.** Todas elas bebem da mesma fonte que
+usamos: o PNCP. Verificamos isso na prática — o campo `usuarioNome` do PNCP
+revelou **18 sistemas distintos** publicando dados (Compras.gov.br, Fiorilli,
+IPM, Betha, Licitar Digital, Licitanet, BLL…). As plataformas comerciais
+adicionam curadoria e alerta por cima do mesmo dado público.
+
+Já temos o dado bruto, de graça, sem limite de termos e com cobertura legal
+(5.570 municípios, art. 174 da Lei 14.133/2021). **Trocar isso por uma API de
+terceiro com teto de 10 req/min e cláusula anti-concorrência seria pior em tudo.**
+
+### Onde elas são úteis, então
+
+**1. Como referência de produto, não de dado.** Ver o LicitaJá mostra o que o
+mercado cobra e oferece: preço de referência, funcionalidades esperadas,
+posicionamento. Isso é inteligência competitiva legítima.
+
+**2. Como parceria/revenda, se fizer sentido comercial.** É o caminho honesto se
+você quiser usar o dado deles: acordo formal, não consumo de API como se fosse
+pública.
+
+**3. A rota oficial de integração do PNCP existe, mas é para o outro sentido.**
+A página "Integre-se ao PNCP" é destinada a sistemas que **enviam** dados de
+órgãos públicos (fluxo de credenciamento com CNPJ e senha). Não é o nosso caso,
+que é **ler** dado aberto. Para ler, a API de dados abertos já é pública.
+
+### Fontes públicas que VALEM adicionar
+
+Testadas agora, todas acessíveis e sem restrição de uso competitivo:
+
+| Fonte | Status | Para que serve aqui |
+|---|---|---|
+| **BrasilAPI** | 200 | Enriquecer com dados do IBGE (população, região) para dimensionar mercado |
+| **Compras.gov.br OCDS** | 200 | Contratos federais em padrão internacional (já integramos) |
+| **Tesouro / SICONFI** | 200 | Dados fiscais dos entes — contexto de capacidade de gasto |
+| **Portal da Transparência** | 401 | Requer chave gratuita; cruzar edital com despesa executada |
+
+**Recomendação:** manter PNCP como espinha dorsal e usar BrasilAPI para
+enriquecimento. As plataformas comerciais entram como referência de mercado, não
+como fonte de dados.
