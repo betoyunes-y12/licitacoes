@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LicitaBot — Resultados</title>
-<link rel="stylesheet" href="/static/estilo.css">
+<link rel="stylesheet" href="{{PREFIXO}}/static/estilo.css">
 </head>
 <body>
 
 <header class="topo">
   <h1>LicitaBot <span>· resultados e concorrência</span></h1>
   <nav class="abas">
-    <a href="/">Licitações</a>
-    <a href="/resultados" class="ativo">Resultados</a>
+    <a href="{{PREFIXO}}/">Licitações</a>
+    <a href="{{PREFIXO}}/resultados" class="ativo">Resultados</a>
   </nav>
 </header>
 
@@ -86,7 +86,8 @@
 
 </div>
 
-<script src="/static/comum.js"></script>
+<script>window.__PREFIXO__ = "{{PREFIXO}}";</script>
+<script src="{{PREFIXO}}/static/comum.js"></script>
 <script>
 const FACETAS = ['categoria', 'uf'];
 const CAMPOS = ['texto', 'fornecedor', 'ni', 'orgao', 'edital',

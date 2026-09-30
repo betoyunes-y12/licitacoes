@@ -65,6 +65,7 @@ const rotulo = (campo, v) => {
    Isso dá link compartilhável, botão voltar funcionando e recarga que não
    perde o filtro — três coisas que um estado só em memória não dá. */
 const Parametros = {
+  // A URL carrega o prefixo junto; removemos para o estado ficar só com filtros.
   ler() {
     const p = new URLSearchParams(location.search);
     const o = {};
@@ -91,6 +92,10 @@ const Parametros = {
 };
 
 // ------------------------------------------------------------------ fetch
+// Prefixo externo injetado pelo servidor ({PREFIXO} no HTML). Vazio quando a
+// interface roda na raiz; '/licitabot' quando atrás de proxy em subpath.
+const PREFIXO = (typeof window !== 'undefined' && window.__PREFIXO__) || '';
+
 async function api(rota, params) {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params || {})) {
@@ -99,7 +104,7 @@ async function api(rota, params) {
     if (Array.isArray(v)) v.forEach((x) => p.append(k + '[]', x));
     else p.set(k, v);
   }
-  const r = await fetch(rota + (p.toString() ? '?' + p : ''));
+  const r = await fetch(PREFIXO + rota + (p.toString() ? '?' + p : ''));
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || r.statusText);
   return r.json();
 }

@@ -113,6 +113,24 @@ class Handler(BaseHTTPRequestHandler):
             caminho.resolve().relative_to(WEB_DIR.resolve())
         except ValueError:
             self._erro("acesso negado", 403); return
+
+        # HTML passa por substituição de prefixo. Sem isso, os caminhos
+        # absolutos do HTML (`/static/...`, `/resultados`) apontam para a RAIZ
+        # do domínio quando a página é servida em subpath -- e no web-host a
+        # raiz é outro serviço, que respondia 401. A página abria sem CSS e
+        # sem dados, e parecia que a interface estava quebrada.
+        if caminho.suffix == ".html":
+            texto = caminho.read_text(encoding="utf-8")
+            texto = texto.replace("{{PREFIXO}}", self.prefixo)
+            corpo = texto.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", TIPOS[".html"])
+            self.send_header("Content-Length", str(len(corpo)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(corpo)
+            return
+
         corpo = caminho.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type",
