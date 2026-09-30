@@ -40,7 +40,7 @@ FILTROS_OPORTUNIDADE: dict[str, tuple[str, str, str]] = {
     "tipo":               ("material_ou_servico", "eq", "str"),
     "beneficio":          ("tipo_beneficio", "like", "str"),
     "processo":           ("processo", "like", "str"),
-    "texto":              ("__texto__", "texto", "str"),
+    "texto":              ("__texto__", "texto", "str"),   # colunas em TEXTO_OPORTUNIDADE
     "valor_min":          ("valor_estimado", "min", "num"),
     "valor_max":          ("valor_estimado", "max", "num"),
     "prazo_de":           ("data_encerramento", "min", "str"),
@@ -62,6 +62,15 @@ ORDENACOES_OPORTUNIDADE = {
     "orgao":        "orgao ASC",
     "uf":           "uf ASC",
 }
+
+# Colunas que a busca livre varre. Ficam em constante PRÓPRIA porque cada
+# tabela tem as suas: a de contratos não tem `itens_json`, e usar a lista de
+# oportunidades contra ela dá "no such column". Foi um bug real na interface
+# de resultados -- buscar por fornecedor retornava erro interno.
+TEXTO_OPORTUNIDADE = ("objeto", "itens_json", "processo",
+                      "informacao_complementar", "orgao")
+TEXTO_CONTRATO = ("objeto", "fornecedor", "ni_fornecedor", "orgao",
+                  "processo", "categoria")
 
 FACETAS_OPORTUNIDADE = [
     ("uf", "UF"),
@@ -138,7 +147,9 @@ def normalizar_filtros(filtros: dict) -> dict:
     return saida
 
 
-def _montar_where(filtros: dict, mapa: dict) -> tuple[list[str], list]:
+def _montar_where(filtros: dict, mapa: dict,
+                  colunas_texto: tuple[str, ...] = TEXTO_OPORTUNIDADE
+                  ) -> tuple[list[str], list]:
     """Traduz filtros em cláusulas WHERE parametrizadas.
 
     Múltiplos valores na MESMA faceta viram OR — escolher "SP" e "MG" significa
@@ -160,13 +171,14 @@ def _montar_where(filtros: dict, mapa: dict) -> tuple[list[str], list]:
         valor = valores[0]
 
         if op == "texto":
-            # procura no objeto, itens, processo e informação complementar.
-            # `itens_json` entra porque muita licitação tem objeto genérico
-            # ("aquisição de bens de TI") e só os itens dizem o que é.
-            where.append("(objeto LIKE ? OR itens_json LIKE ? OR "
-                         "processo LIKE ? OR informacao_complementar LIKE ? OR "
-                         "orgao LIKE ?)")
-            args += [f"%{valor}%"] * 5
+            # As colunas vêm do parâmetro, não do nome da tabela: cada tabela
+            # tem o seu conjunto. `itens_json` entra nas oportunidades porque
+            # muita licitação tem objeto genérico ("aquisição de bens de TI") e
+            # só os itens dizem o que é -- mas a tabela de contratos não tem
+            # essa coluna, e referenciá-la ali quebrava a busca.
+            cond = " OR ".join(f"{col} LIKE ?" for col in colunas_texto)
+            where.append(f"({cond})")
+            args += [f"%{valor}%"] * len(colunas_texto)
         elif op == "eq":
             # OR entre valores da mesma faceta (SP ou MG), AND entre facetas
             marcadores = ", ".join("?" for _ in valores)
@@ -221,14 +233,16 @@ def consultar_paginado(
             "ni":           ("ni_fornecedor", "eq", "str"),
             "categoria":    ("categoria", "like", "str"),
             "edital":       ("edital_id", "eq", "str"),
-            "texto":        ("__texto__", "texto", "str"),
+            "texto":        ("__texto__", "texto", "str"),   # TEXTO_CONTRATO
             "valor_min":    ("valor_global", "min", "num"),
             "valor_max":    ("valor_global", "max", "num"),
             "publicado_de": ("data_publicacao", "min", "str"),
         }
         ordens, base = ORDENACOES_CONTRATO, "contratos"
 
-    where, args = _montar_where(filtros, mapa)
+    colunas_texto = (TEXTO_OPORTUNIDADE if tabela == "oportunidades"
+                     else TEXTO_CONTRATO)
+    where, args = _montar_where(filtros, mapa, colunas_texto)
 
     # "abertos" só existe para oportunidades (prazo no futuro, em horário de
     # Brasília — comparar com UTC escondia as que venciam no próprio dia)
@@ -289,7 +303,9 @@ def facetas(conn, tabela: str = "oportunidades", filtros: dict | None = None) ->
         }
         defs, base = FACETAS_CONTRATO, "contratos"
 
-    where, args = _montar_where(filtros, mapa)
+    colunas_texto = (TEXTO_OPORTUNIDADE if tabela == "oportunidades"
+                     else TEXTO_CONTRATO)
+    where, args = _montar_where(filtros, mapa, colunas_texto)
     if tabela == "oportunidades" and _somente_abertos(filtros or {}):
         where.append("data_encerramento >= ?")
         args.append(agora_brt())
