@@ -34,6 +34,9 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .auth import ARQ_PADRAO as ARQ_SENHAS
+from .auth import configurado as auth_configurado
+from .auth import verificar as auth_verificar
 from .store import DB_PATH
 from .web_queries import (
     consultar_paginado,
@@ -85,8 +88,16 @@ class Handler(BaseHTTPRequestHandler):
     # serve --set-path /licitabot` entrega o caminho COM o prefixo, então o
     # roteamento precisa descartá-lo. Sem isso, /licitabot/ cai em 404.
     prefixo = ""
+    exigir_auth = True
+    arq_senhas = ARQ_SENHAS
 
     # ------------------------------------------------------------- utilidades
+    def _precisa_auth(self) -> bool:
+        """Auth é exigida quando existe arquivo de senhas. A ausência do
+        arquivo mantém o comportamento anterior (protegido só pelo tailnet),
+        para não quebrar quem já usa assim."""
+        return self.exigir_auth and auth_configurado(self.arq_senhas)
+
     def _autorizado(self) -> bool:
         if self.permitir_todas:
             return True
@@ -145,6 +156,18 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------ rotas
     def do_GET(self) -> None:  # noqa: N802 (API do http.server)
+        if self._precisa_auth():
+            usuario = auth_verificar(self.headers.get("Authorization"),
+                                     self.arq_senhas)
+            if not usuario:
+                self.send_response(401)
+                self.send_header("WWW-Authenticate",
+                                 'Basic realm="LicitaBot", charset="UTF-8"')
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"autenticacao necessaria\n")
+                return
+
         if not self._autorizado():
             self._erro(
                 "acesso restrito. A interface libera apenas localhost e o "
@@ -257,10 +280,14 @@ def _int(v, default):
 def rodar(host: str = "127.0.0.1", porta: int = 8080,
           db_path: Path | str | None = None,
           permitir_todas: bool = False,
-          prefixo: str = "") -> None:
+          prefixo: str = "",
+          exigir_auth: bool = True,
+          arq_senhas: Path | str | None = None) -> None:
     Handler.db_path = Path(db_path) if db_path else DB_PATH
     Handler.permitir_todas = permitir_todas
     Handler.prefixo = prefixo.rstrip("/")
+    Handler.exigir_auth = exigir_auth
+    Handler.arq_senhas = Path(arq_senhas) if arq_senhas else ARQ_SENHAS
     # confere a base antes de subir, para falhar com mensagem clara
     abrir_ro(Handler.db_path).close()
 
@@ -277,6 +304,10 @@ def rodar(host: str = "127.0.0.1", porta: int = 8080,
             print("  ATENÇÃO: aberto para qualquer origem (--permitir-todas).")
         else:
             print("  acesso liberado apenas para localhost e o tailnet (100.x).")
+    if Handler.exigir_auth and auth_configurado(Handler.arq_senhas):
+        print(f"  autenticação : HTTP Basic (usuários em {Handler.arq_senhas})")
+    else:
+        print("  autenticação : DESLIGADA — protegido apenas por rede")
     print("  (Ctrl+C para parar)")
     try:
         srv.serve_forever()

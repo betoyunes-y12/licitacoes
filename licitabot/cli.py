@@ -422,7 +422,8 @@ def cmd_web(args) -> int:
     from .web_app import rodar
     try:
         rodar(host=args.host, porta=args.porta, db_path=args.db,
-              permitir_todas=args.permitir_todas, prefixo=args.prefixo or "")
+              permitir_todas=args.permitir_todas, prefixo=args.prefixo or "",
+              exigir_auth=not args.sem_auth, arq_senhas=args.arquivo_senhas)
     except FileNotFoundError as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
@@ -430,6 +431,27 @@ def cmd_web(args) -> int:
         print(f"\nNão consegui abrir {args.host}:{args.porta} — {e}", file=sys.stderr)
         print("Tente outra porta: --porta 8081\n", file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_senha(args) -> int:
+    """Cria ou redefine a credencial de acesso da interface."""
+    from .auth import criar_arquivo, gerar_senha
+
+    senha = args.senha or gerar_senha()
+    caminho, usuario, senha = criar_arquivo(
+        args.arquivo, usuario=args.usuario, senha=senha)
+
+    print(f"\n{'='*64}")
+    print("  CREDENCIAL CRIADA")
+    print(f"{'='*64}")
+    print(f"  arquivo : {caminho}")
+    print(f"  usuário : {usuario}")
+    print(f"  senha   : {senha}")
+    print(f"{'='*64}")
+    print("\n  Anote a senha agora: ela NÃO é armazenada em texto, só o hash.")
+    print("  Para trocar:  python3 -m licitabot.cli senha")
+    print("  O arquivo está no .gitignore e com permissão 600.\n")
     return 0
 
 
@@ -790,6 +812,12 @@ def main(argv=None) -> int:
     p.add_argument("--fornecedor", help="histórico de um fornecedor (CNPJ)")
     p.set_defaults(func=cmd_contratos)
 
+    p = sub.add_parser("senha", help="cria/redefine a credencial da interface web")
+    p.add_argument("--usuario", default="licitabot")
+    p.add_argument("--senha", default=None, help="se omitido, gera uma forte")
+    p.add_argument("--arquivo", default=None)
+    p.set_defaults(func=cmd_senha)
+
     p = sub.add_parser("web", help="sobe a interface web (licitações + resultados)")
     p.add_argument("--host", default="127.0.0.1",
                    help="127.0.0.1 (padrão, local) ou 0.0.0.0 para expor na rede")
@@ -798,6 +826,9 @@ def main(argv=None) -> int:
                    help="prefixo externo quando atrás de proxy (ex.: /licitabot)")
     p.add_argument("--permitir-todas", action="store_true",
                    help="libera qualquer origem (padrão: só localhost e tailnet)")
+    p.add_argument("--sem-auth", action="store_true",
+                   help="desliga a autenticação (padrão: liga se houver credencial)")
+    p.add_argument("--arquivo-senhas", default=None)
     p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("links", help="lista licitações com links e documentos")
