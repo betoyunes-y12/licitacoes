@@ -24,6 +24,9 @@ ExecStart=/root/Licitações/licitabot/scripts/atualizar.sh
 # Se falhar, tenta de novo em 5 min (rede instável acontece)
 Restart=on-failure
 RestartSec=300
-TimeoutStartSec=3600
+# A coleta completa (snapshot + backfill do mes + classificacao) passa de 1h
+# em dias com muito edital. Com 3600 o systemd matava no meio (ExecMainStatus=15,
+# "Failed with result 'timeout'") e parte da coleta se perdia. 3h da folga.
+TimeoutStartSec=10800
 StandardOutput=journal
 StandardError=journal
